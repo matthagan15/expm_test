@@ -1,0 +1,17 @@
+[package]
+name = "expm_test"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ndarray = {version = "*", features = ["blas"]}
+blas-src = {version = "*", features = ["intel-mkl"]}
+# blas-src = {version = "*", features = ["accelerate"]}
+ndarray-linalg = {version = "*", path = "/Users/matt/repos/ndarray-linalg/ndarray-linalg"}
+rand = "*"
+num-complex = "*"
+
+# [dependencies.openblas-src]
+# path = "/Users/matt/repos/openblas-src/openblas-src"
