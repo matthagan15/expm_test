@@ -61,8 +61,8 @@ fn random_sparse_matrix() {
 
 fn random_dense_matrix() {
     let mut rng = rand::thread_rng();
-    let n = 150;
-    let samps = 300;
+    let n = 200;
+    let samps = 100;
     let scale = 1.;
     let mut results = Vec::new();
     let mut avg_entry_error = Vec::new();

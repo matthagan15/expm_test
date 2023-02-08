@@ -2,8 +2,8 @@
 import numpy as np
 import scipy.linalg
 
-n = 50
-samps = 1000
+n = 200
+samps = 100
 scale = 1.
 diff_norms = []
 avg_entry_diff = []
