@@ -1,25 +1,23 @@
 use ndarray::*;
 use ndarray::linalg::kron;
 use ndarray_linalg::expm::expm;
-use ndarray_linalg::{Eig, OperationNorm};
+use ndarray_linalg::{Eig, OperationNorm, Scalar};
 use num_complex::{Complex64 as c64, ComplexFloat};
 use rand::*;
+use std::f64;
 use std::process::Command;
 
-fn random_sparse_matrix() {
-    let mut rng = rand::thread_rng();
-    let num_samples = 100;
-    let num_qubits: u32 = 10; // controls dimension of resulting sparse matrix
-    let dim = 2_usize.pow(num_qubits);
+fn sample_random_pauli(num_qubits: u32, num_terms: usize) -> Array2<c64> {
+    let mut rng = thread_rng();
     let i = c64::new(0., 1.);
     let zero = c64::new(0., 0.);
+    let dim = 2_usize.pow(num_qubits);
     let pauli_x = array![[zero, c64::new(1., 0.)], [c64::new(1., 0.), zero]];
     let pauli_y = array![[zero, c64::new(0., -1.)], [c64::new(0., 1.), zero]];
     let pauli_z = array![[c64::new(1., 0.), zero], [zero, c64::new(-1., 0.)]];
-    let mut results_difference_norms = Vec::with_capacity(num_samples);
-    for ix in 0..num_samples {
-        println!("{:2}% complete", ix as f64 / num_samples as f64);
-        let mut matrix = Array2::<c64>::eye(2);
+    let mut ret  = Array2::<c64>::zeros((dim, dim).f());
+    for _ in 0..num_terms {
+        let mut tmp = Array2::<c64>::eye(2); 
         for n in 0..num_qubits {
             let pauli_matrix = match rng.gen_range::<i32,_>(0..=3) {
                 0 => {
@@ -37,11 +35,30 @@ fn random_sparse_matrix() {
                 _ => unreachable!(),
             };
             if n == 0 {
-                matrix = matrix.dot(&pauli_matrix);
+                tmp = tmp.dot(&pauli_matrix);
             } else {
-                matrix = kron(&matrix, &pauli_matrix);
+                tmp = kron(&tmp, &pauli_matrix);
             }
         }
+        ret.scaled_add(c64::from_real(1.0), &tmp);
+    }
+    ret
+}
+
+fn random_sparse_matrix() {
+    let mut rng = rand::thread_rng();
+    let num_samples = 100;
+    let num_qubits: u32 = 10; // controls dimension of resulting sparse matrix
+    let dim = 2_usize.pow(num_qubits);
+    let i = c64::new(0., 1.);
+    let zero = c64::new(0., 0.);
+    let pauli_x = array![[zero, c64::new(1., 0.)], [c64::new(1., 0.), zero]];
+    let pauli_y = array![[zero, c64::new(0., -1.)], [c64::new(0., 1.), zero]];
+    let pauli_z = array![[c64::new(1., 0.), zero], [zero, c64::new(-1., 0.)]];
+    let mut results_difference_norms = Vec::with_capacity(num_samples);
+    for ix in 0..num_samples {
+        println!("{:2}% complete", ix as f64 / num_samples as f64);
+        let matrix = sample_random_pauli(num_qubits, 1);
         // now check that this matrix squares to the identity
         let matrix_squared = matrix.dot(&matrix);
         let diff = &matrix_squared - Array2::<c64>::eye(dim);
@@ -60,15 +77,22 @@ fn random_sparse_matrix() {
 }
 
 fn random_dense_matrix() {
+    let scales = vec![0.001, 0.01, 0.1, 1.];
+    for scale in scales {
+        random_dense_matrix_scaled(scale);
+    }
+}
+
+fn random_dense_matrix_scaled(scale: f64) {
     let mut rng = rand::thread_rng();
     let n = 200;
     let samps = 100;
-    let scale = 1.;
     let mut results = Vec::new();
     let mut avg_entry_error = Vec::new();
     // Used to control what pade approximation is most likely to be used.
     // the smaller the norm the lower the degree used.
-    for _ in 0..samps {
+    for samp in 0..samps {
+        println!("{:.2}% done", (samp as f32) / (samps as f32));
         // Sample a completely random matrix.
         let mut matrix: Array2<c64> = Array2::<c64>::ones((n, n).f());
         matrix.mapv_inplace(|_| c64::new(rng.gen::<f64>() * 1., rng.gen::<f64>() * 1.));
@@ -93,7 +117,7 @@ fn random_dense_matrix() {
         // println!("deg: {:}", deg);
         let diff = &expm_comp - &eigen_expm;
         avg_entry_error.push({
-            let tot = diff.map(|x| x.abs()).into_iter().sum::<f64>();
+            let tot = diff.map(|x| x.norm()).into_iter().sum::<f64>();
             tot / (n * n) as f64
         });
         results.push(diff.opnorm_one().unwrap());
@@ -106,10 +130,11 @@ fn random_dense_matrix() {
         results.iter().map(|x| f64::powi(x - avg, 2)).sum::<f64>() / (results.len() - 1) as f64,
         0.5,
     );
+    println!("{:}", "*".repeat(70));
     println!("collected {:} samples.", results.len());
     println!("scaling factor: {:}", scale);
     println!("dimensions: {:}", n);
-    println!("diff norm per epsilon: {:} +- ({:})", avg / f64::EPSILON, std / f64::EPSILON);
+    println!("one norm of difference matrix per epsilon: {:} +- ({:})", avg / f64::EPSILON, std / f64::EPSILON);
     println!(
         "average entry error over epsilon: {:}",
         avg_entry_diff / f64::EPSILON
@@ -121,8 +146,8 @@ fn main() {
     println!("###########################################################################################################################");
     // println!("python results below.");
     // let out = Command::new("/Users/matt/repos/expm_test/scipy_expm_random_matrix_tester.py")
-    //     .output()
-    //     .expect("failed to execute process");
+        // .output()
+        // .expect("failed to execute process");
     // let formatted_py_out = String::from_utf8(out.stdout).unwrap();
     // println!("{:}", formatted_py_out);
     // println!("###########################################################################################################################");
